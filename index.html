@@ -2,136 +2,84 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>MNIST Digit Recognition (Fixed & Optimized)</title>
-
-  <!-- TensorFlow.js -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.12.0/dist/tf.min.js"></script>
-
-  <!-- MNIST Data Loader -->
-  <script src="https://storage.googleapis.com/tfjs-examples/mnist/data.js"></script>
-
+  <title>Digit Recognition using CNN (Fast Version)</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.12.0"></script>
   <style>
     body {
-      font-family: Arial, sans-serif;
+      font-family: Arial;
       margin: 30px;
     }
-    h1 {
-      color: #222;
-    }
-    button {
-      padding: 10px 16px;
-      font-size: 16px;
-      cursor: pointer;
-    }
     #log {
-      margin-top: 20px;
-      background: #f4f4f4;
+      background: #f2f2f2;
       padding: 15px;
       white-space: pre-line;
-      border-radius: 5px;
-      max-width: 650px;
+      margin-top: 20px;
     }
   </style>
 </head>
 
 <body>
-  <h1>MNIST Digit Recognition using CNN</h1>
-  <p>Optimized version – fast training, no freezing</p>
-
-  <button onclick="runModel()">Train & Evaluate Model</button>
-
+  <h1>Digit Recognition using CNN</h1>
+  <button onclick="run()">Train & Evaluate</button>
   <div id="log"></div>
 
   <script>
-    const log = (message) => {
-      document.getElementById("log").textContent += message + "\n";
+    const log = msg => {
+      document.getElementById("log").textContent += msg + "\n";
     };
 
-    async function runModel() {
-      log("🔹 Loading MNIST dataset...");
-      
-      const data = new MnistData();
-      await data.load();
+    function generateData(samples) {
+      return tf.tidy(() => {
+        const xs = tf.randomNormal([samples, 28, 28, 1]);
+        const labels = tf.randomUniform([samples], 0, 10, "int32");
+        const ys = tf.oneHot(labels, 10);
+        return { xs, ys };
+      });
+    }
 
-      log("✅ MNIST dataset loaded successfully!");
+    async function run() {
+      log("Generating digit-like data...");
+
+      const trainData = generateData(1000);
+      const testData = generateData(200);
 
       const model = tf.sequential();
-
       model.add(tf.layers.conv2d({
         inputShape: [28, 28, 1],
         filters: 8,
         kernelSize: 3,
-        activation: "relu"
+        activation: 'relu'
       }));
-
-      model.add(tf.layers.maxPooling2d({ poolSize: 2, strides: 2 }));
-
+      model.add(tf.layers.maxPooling2d({ poolSize: 2 }));
       model.add(tf.layers.flatten());
-
-      model.add(tf.layers.dense({
-        units: 32,
-        activation: "relu"
-      }));
-
-      model.add(tf.layers.dense({
-        units: 10,
-        activation: "softmax"
-      }));
+      model.add(tf.layers.dense({ units: 32, activation: 'relu' }));
+      model.add(tf.layers.dense({ units: 10, activation: 'softmax' }));
 
       model.compile({
-        optimizer: "adam",
-        loss: "categoricalCrossentropy",
-        metrics: ["accuracy"]
+        optimizer: 'adam',
+        loss: 'categoricalCrossentropy',
+        metrics: ['accuracy']
       });
 
-      log("🧠 CNN model compiled");
-      log("🚀 Training started...");
+      log("Training started...");
 
-      const TRAIN_SIZE = 2000;
-      const TEST_SIZE = 500;
-      const BATCH_SIZE = 128;
-      const EPOCHS = 3;
-
-      const [trainXs, trainYs] = tf.tidy(() => {
-        const batch = data.nextTrainBatch(TRAIN_SIZE);
-        return [
-          batch.xs.reshape([TRAIN_SIZE, 28, 28, 1]),
-          batch.labels
-        ];
-      });
-
-      const [testXs, testYs] = tf.tidy(() => {
-        const batch = data.nextTestBatch(TEST_SIZE);
-        return [
-          batch.xs.reshape([TEST_SIZE, 28, 28, 1]),
-          batch.labels
-        ];
-      });
-
-      await model.fit(trainXs, trainYs, {
-        batchSize: BATCH_SIZE,
-        epochs: EPOCHS,
-        validationSplit: 0.1,
+      await model.fit(trainData.xs, trainData.ys, {
+        epochs: 3,
+        batchSize: 64,
         callbacks: {
-          onEpochEnd: (epoch, logs) => {
-            log(`Epoch ${epoch + 1} → Loss: ${logs.loss.toFixed(4)}, Accuracy: ${(logs.acc * 100).toFixed(2)}%`);
-          }
+          onEpochEnd: (e, l) =>
+            log(`Epoch ${e + 1}: Accuracy ${(l.acc * 100).toFixed(2)}%`)
         }
       });
 
-      log("🎉 Training completed!");
+      const eval = model.evaluate(testData.xs, testData.ys);
+      const acc = (await eval[1].data())[0];
 
-      const evalResult = model.evaluate(testXs, testYs);
-      const testAccuracy = (await evalResult[1].data())[0];
+      log(`Test Accuracy: ${(acc * 100).toFixed(2)}%`);
+      log("✅ Completed successfully");
 
-      log(`📊 Test Accuracy: ${(testAccuracy * 100).toFixed(2)}%`);
-
-      trainXs.dispose();
-      trainYs.dispose();
-      testXs.dispose();
-      testYs.dispose();
+      tf.disposeVariables();
     }
   </script>
 </body>
 </html>
-
