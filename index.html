@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MNIST Digit Recognition (Fixed & Optimized)</title>
+
+  <!-- TensorFlow.js -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.12.0/dist/tf.min.js"></script>
+
+  <!-- MNIST Data Loader -->
+  <script src="https://storage.googleapis.com/tfjs-examples/mnist/data.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 30px;
+    }
+    h1 {
+      color: #222;
+    }
+    button {
+      padding: 10px 16px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    #log {
+      margin-top: 20px;
+      background: #f4f4f4;
+      padding: 15px;
+      white-space: pre-line;
+      border-radius: 5px;
+      max-width: 650px;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>MNIST Digit Recognition using CNN</h1>
+  <p>Optimized version – fast training, no freezing</p>
+
+  <button onclick="runModel()">Train & Evaluate Model</button>
+
+  <div id="log"></div>
+
+  <script>
+    const log = (message) => {
+      document.getElementById("log").textContent += message + "\n";
+    };
+
+    async function runModel() {
+      log("🔹 Loading MNIST dataset...");
+      
+      const data = new MnistData();
+      await data.load();
+
+      log("✅ MNIST dataset loaded successfully!");
+
+      const model = tf.sequential();
+
+      model.add(tf.layers.conv2d({
+        inputShape: [28, 28, 1],
+        filters: 8,
+        kernelSize: 3,
+        activation: "relu"
+      }));
+
+      model.add(tf.layers.maxPooling2d({ poolSize: 2, strides: 2 }));
+
+      model.add(tf.layers.flatten());
+
+      model.add(tf.layers.dense({
+        units: 32,
+        activation: "relu"
+      }));
+
+      model.add(tf.layers.dense({
+        units: 10,
+        activation: "softmax"
+      }));
+
+      model.compile({
+        optimizer: "adam",
+        loss: "categoricalCrossentropy",
+        metrics: ["accuracy"]
+      });
+
+      log("🧠 CNN model compiled");
+      log("🚀 Training started...");
+
+      const TRAIN_SIZE = 2000;
+      const TEST_SIZE = 500;
+      const BATCH_SIZE = 128;
+      const EPOCHS = 3;
+
+      const [trainXs, trainYs] = tf.tidy(() => {
+        const batch = data.nextTrainBatch(TRAIN_SIZE);
+        return [
+          batch.xs.reshape([TRAIN_SIZE, 28, 28, 1]),
+          batch.labels
+        ];
+      });
+
+      const [testXs, testYs] = tf.tidy(() => {
+        const batch = data.nextTestBatch(TEST_SIZE);
+        return [
+          batch.xs.reshape([TEST_SIZE, 28, 28, 1]),
+          batch.labels
+        ];
+      });
+
+      await model.fit(trainXs, trainYs, {
+        batchSize: BATCH_SIZE,
+        epochs: EPOCHS,
+        validationSplit: 0.1,
+        callbacks: {
+          onEpochEnd: (epoch, logs) => {
+            log(`Epoch ${epoch + 1} → Loss: ${logs.loss.toFixed(4)}, Accuracy: ${(logs.acc * 100).toFixed(2)}%`);
+          }
+        }
+      });
+
+      log("🎉 Training completed!");
+
+      const evalResult = model.evaluate(testXs, testYs);
+      const testAccuracy = (await evalResult[1].data())[0];
+
+      log(`📊 Test Accuracy: ${(testAccuracy * 100).toFixed(2)}%`);
+
+      trainXs.dispose();
+      trainYs.dispose();
+      testXs.dispose();
+      testYs.dispose();
+    }
+  </script>
+</body>
+</html>
+
